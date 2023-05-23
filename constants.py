@@ -1,0 +1,6 @@
+RETURN = 10
+ESC    = 27
+UP     = 450
+LEFT   = 452
+RIGHT  = 454
+DOWN   = 456
