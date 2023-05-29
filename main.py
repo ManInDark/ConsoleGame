@@ -1,6 +1,7 @@
 from constants import *
 from unicurses import *
 from random import choice
+from items import Item, Coin
 stdscr = initscr()
 
 if __name__ != "__main__":
@@ -14,7 +15,7 @@ PLAYER_DATA = { # attack without anything is 1
     "coins": 0,
     "health": 100,
     "health-max": 100,
-    "inventory": [],
+    "inventory": {},
     "equipped": []
 }
 GAMESTATE = [0]
@@ -30,16 +31,15 @@ def calculateDefense() -> int:
 
 def print_header():
     width = 9
-    addstr(f"---  Coins: {str(PLAYER_DATA['coins']).rjust(width)}   Attack: {str(calculateAttack()).rjust(width)}\n")
+    addstr(f"---  Coins: {str(PLAYER_DATA['coins']).rjust(width-1)}⛃   Attack: {str(calculateAttack()).rjust(width)}\n")
     health = f"{PLAYER_DATA['health']}/{PLAYER_DATA['health-max']}".rjust(width)
     addstr(f"--- Health: {health}  Defense: {str(calculateDefense()).rjust(width)}\n\n")
-    # TODO Attack and Defense
 
-def print_option_list (options):
+def print_option_list(options, index=0):
     global SELECTION_OPTIONS
     for n, option in enumerate(options):
         addstr(f"  ({'+' if TMP_DATA[SELECTION_OPTIONS[1]] == n else ' '}) {option}\n")
-    SELECTION_OPTIONS = [len(options), 0]
+    SELECTION_OPTIONS = [len(options), index]
 
 def print_gamestate():
 
@@ -64,13 +64,34 @@ def print_gamestate():
             elif GAMESTATE[2] == 0:
                 GAMESTATE.append(DUNGEON_BOSSES[GAMESTATE[1]].copy())
         if len(GAMESTATE) == 4: # now we're fighting; GAMESTATE = [1, DUNGEON_LEVEL, ENEMIES_UNTIL BOSS, {}]; {} = current enemy
-            addstr(f"You are in the dungeon {GAMESTATE[1] + 1}. Having encountered the enemy number {(GAMESTATE[1] + 1) * 5 - GAMESTATE[2] + 1}, which is a {GAMESTATE[3]['name']}, what do you want to do?\n\n")
+            addstr(f"You are in the dungeon {GAMESTATE[1] + 1}. Having encountered the enemy number {(GAMESTATE[1] + 1) * 5 - GAMESTATE[2] + 1}, which is a {GAMESTATE[3].name}, what do you want to do?\n\n")
             options = ["Attack", "Flee"]
             print_option_list(options)
 
     # SMITHY
     if GAMESTATE[0] == 2:
-        addstr("You are currently in the smithy. What would you like to do?\n\n")
+        if len(GAMESTATE) == 1:
+            addstr("You are currently in the smithy. What would you like to do?\n\n")
+            options = ["Sell", "Combine", "Return"]
+            print_option_list(options)
+        elif len(GAMESTATE) == 2:
+            if GAMESTATE[1] == 0: # Sell
+                if len(PLAYER_DATA["inventory"]) <= 0:
+                    addstr("You are currently in the smithy, but you don't have anything to sell.\n\n")
+                    options = ["Return"]
+                    print_option_list(options)
+                else:
+                    addstr("You are currently in the smithy. What would you like to sell?\n\n")
+                    options = [f"{amount} * {item.type.capitalize().ljust(20, ' ')}:{item.determine_price()}⛃" for item, amount in PLAYER_DATA["inventory"].items()] + ["Return"]
+                    print_option_list(options)
+            elif GAMESTATE[1] == 1: # Combine
+                pass
+        # display inventory
+        # if len(PLAYER_DATA["inventory"]) > 0:
+        #     for item, amount in PLAYER_DATA["inventory"].items():
+        #         addstr(f"  {amount} * {item.type.capitalize().ljust(20, ' ')}\n")
+        # else:
+        #     addstr("  You have no items.")
     
     addstr("\n")
     for message in MESSAGES:
@@ -92,7 +113,11 @@ def handle_input(ch: int):
             return # to not execute the code for HOME, DUNGEON, ...
         elif ch == RETURN:
             SELECTION_OPTIONS[0] = -2 # indicate that selection has been done
+        else:
+            return
     
+    # this point only gets crossed if something was selected (ch == RETURN)
+
     # HOME
     if GAMESTATE[0] == 0: 
         if len(GAMESTATE) == 1:
@@ -112,37 +137,60 @@ def handle_input(ch: int):
                 GAMESTATE = [0]
         elif len(GAMESTATE) == 4:
             if TMP_DATA[SELECTION_OPTIONS[1]] == 0: # attack
-                GAMESTATE[3]["health"] -= calculateAttack() # player damages enemy
-                MESSAGES.append(f"You damaged the {GAMESTATE[3]['name']} for {calculateAttack()} damage.")
+                player_damage = calculateAttack()
+                GAMESTATE[3].health = max(GAMESTATE[3].health - player_damage, 0) # player damages enemy
+                MESSAGES.append(f"You damaged the {GAMESTATE[3].name} for {player_damage} damage.")
 
-                if GAMESTATE[3]["health"] > 0: # enemy still alive
-                    PLAYER_DATA["health"] -= min(0, GAMESTATE[3]["attack"]) # enemy damages player
-                    MESSAGES.append(f"{GAMESTATE[3]['name']} attacked you and dealt {GAMESTATE[3]['attack']} damage.")
+                # enemy still alive
+                if GAMESTATE[3].health > 0:
+                    PLAYER_DATA["health"] = max(0, PLAYER_DATA["health"] - GAMESTATE[3].attack) # enemy damages player
+                    MESSAGES.append(f"{GAMESTATE[3].name} attacked you and dealt {GAMESTATE[3].attack} damage.")
                     if PLAYER_DATA["health"] <= 0: # if player dies
                         GAMESTATE = [0]
                         MESSAGES.append(f"You died and were ejected from the dungeon.")
                 
-                else: # enemy dead
-                    MESSAGES.append(f"You have defeated the {GAMESTATE[3]['name']}!")
-                    loot = {}
-                    if GAMESTATE[2] > 0: # normal enemy
-                        loot = choice(DUNGEON_MONSTERS_LOOT[GAMESTATE[1]]).copy()
-                    else: # boss
-                        loot = choice(DUNGEON_BOSSES_LOOT[GAMESTATE[1]]).copy()
+                # enemy dead
+                else:
+                    MESSAGES.append(f"You have defeated the {GAMESTATE[3].name}!")
+                    loot = (choice(DUNGEON_MONSTERS_LOOT[GAMESTATE[1]] if GAMESTATE[2] > 0 else DUNGEON_BOSSES_LOOT[GAMESTATE[1]])).copy()
 
-                    # add loot to inventory                    
-                    if loot["type"] == "coins":
-                        MESSAGES.append(f"You received {loot['amount']} coins!")
-                        PLAYER_DATA["coins"] += loot["amount"]
-                    else:
-                        MESSAGES.append(f"You picked up a {loot['type']}!")
-                        PLAYER_DATA["inventory"].append(loot)
+                    # add loot to inventory
+                    if type(loot) is Coin:
+                        MESSAGES.append(f"You received {loot.amount} coins!")
+                        PLAYER_DATA["coins"] += loot.amount
+                    elif type(loot) is Item:
+                        MESSAGES.append(f"You picked up a {loot.type}!")
+                        PLAYER_DATA["inventory"][loot] = PLAYER_DATA["inventory"][loot] + 1 if loot in PLAYER_DATA["inventory"] else 1 # in case it is not yet in the inventory
                     
                     GAMESTATE[2] -= 1 # advance one enemy
                     GAMESTATE.pop(3) # remove enemy (indicates that a new one should be added in handle_input)
             elif TMP_DATA[SELECTION_OPTIONS[1]] == 1: # flee
                 MESSAGES.append("You fled from the dungeon.")
                 GAMESTATE = [0]
+    
+    # SMITHY
+    elif GAMESTATE[0] == 2:
+        if len(GAMESTATE) == 1: # only if in selection screen: Sell, Combine, Return
+            if TMP_DATA[SELECTION_OPTIONS[1]] == 0:
+                GAMESTATE = [2, 0] # -> Sell
+            if TMP_DATA[SELECTION_OPTIONS[1]] == 1:
+                GAMESTATE = [2, 1] # -> Combine TODO implement
+            if TMP_DATA[SELECTION_OPTIONS[1]] == 2:
+                GAMESTATE = [0] # Return
+        elif len(GAMESTATE) == 2: # now in Sell || Combine
+            if GAMESTATE[1] == 0: # Sell
+                if TMP_DATA[SELECTION_OPTIONS[1]] == len(PLAYER_DATA["inventory"]): # Return was selected
+                    GAMESTATE = [2]
+                else:
+                    selected_item: Item = list(PLAYER_DATA["inventory"].keys())[TMP_DATA[SELECTION_OPTIONS[1]]]
+                    # try: # in case it does not exist
+                    PLAYER_DATA["inventory"][selected_item] -= 1
+                    PLAYER_DATA["coins"] += selected_item.determine_price()
+                    MESSAGES.append(f"You sold {selected_item.type} for {selected_item.determine_price()}⛃")
+                    if PLAYER_DATA["inventory"][selected_item] <= 0:
+                        del PLAYER_DATA["inventory"][selected_item]
+            elif GAMESTATE[1] == 1: # Combine
+                pass
 
     if SELECTION_OPTIONS[0] == -2: # revert to no selection
         SELECTION_OPTIONS[0] = -1

@@ -1,3 +1,6 @@
+from items import Item, Coin
+from monsters import Entity
+
 RETURN = 10
 ESC    = 27
 UP     = 450
@@ -7,26 +10,27 @@ DOWN   = 456
 
 DUNGEON_MONSTERS = [
     [
-        {"name": "Slime", "health": 15, "health-max": 15, "attack": 1},
-        {"name": "Goblin", "health": 10, "health-max": 10, "attack": 4}
+        Entity("Slime", 15, 1, 0),
+        Entity("Goblin", 10, 4, 0)
     ]
 ]
 DUNGEON_MONSTERS_LOOT = [
     [
-        {"type": "sword", "level": 1},
-        {"type": "chestplate", "level": 1},
-        {"type": "coins", "amount": 2},
-        {"type": "coins", "amount": 3},
-        {"type": "coins", "amount": 4}
+        Item("sword", 0, 1),
+        Item("chestplate", 0, 1),
+        Item("apple", 0, 2),
+        Coin(2),
+        Coin(3),
+        Coin(4)
     ]
 ]
 DUNGEON_BOSSES = [
-    {"name": "Boss Goblin", "health": 30, "health-max": 30, "attack": 8}
+    Entity("Boss Goblin", 30, 8, 0)
 ]
 DUNGEON_BOSSES_LOOT = [
     [
-        {"type": "sword", "level": 1},
-        {"type": "chestplate", "level": 1},
-        {"type": "coins", "amount": 6}
+        Item("sword", 0, 2),
+        Item("chestplate", 0, 2),
+        Coin(6)
     ]
 ]
