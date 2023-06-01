@@ -15,11 +15,20 @@ class Item:
     
     def determine_price(self) -> int:
         baseprice = {
-            "chestplate": 5,
-            "sword": 5,
-            "apple": 5
+            "chestplate": 20,
+            "sword": 20,
+            "apple": 20
         }[self.type]
         return int(baseprice * (1+0.05*(self.level%10)) * (2**int(self.level/10)))
+
+    def __eq__(self, __value: object) -> bool:
+        return self.type == __value.type and self.level == __value.level and self.amount == __value.amount
+    
+    def __hash__(self) -> int:
+        return hash((self.type, self.level, self.amount))
+    
+    def __str__(self) -> str:
+        return f"{self.type.capitalize()}{f' T{self.level}' if self.level > 0 else ''}"
 
 class Coin(Item):
     def __init__(self, amount: int) -> None:

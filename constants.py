@@ -19,9 +19,9 @@ DUNGEON_MONSTERS_LOOT = [
         Item("sword", 0, 1),
         Item("chestplate", 0, 1),
         Item("apple", 0, 2),
-        Coin(2),
-        Coin(3),
-        Coin(4)
+        Coin(19),
+        Coin(20),
+        Coin(21)
     ]
 ]
 DUNGEON_BOSSES = [
@@ -34,3 +34,5 @@ DUNGEON_BOSSES_LOOT = [
         Coin(6)
     ]
 ]
+
+EMPTY_INVENTORY = {"sword": None, "chestplate": None}

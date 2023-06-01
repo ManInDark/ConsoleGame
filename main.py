@@ -2,26 +2,34 @@ from constants import *
 from unicurses import *
 from random import choice
 from items import Item, Coin
-stdscr = initscr()
-
-if __name__ != "__main__":
-    exit()
-
-clear()
-curs_set(False)
-keypad(scr_id=stdscr, yes=True)
 
 PLAYER_DATA = { # attack without anything is 1
     "coins": 0,
     "health": 100,
     "health-max": 100,
     "inventory": {},
-    "equipped": []
+    "equipped": EMPTY_INVENTORY.copy()
 }
 GAMESTATE = [0]
 TMP_DATA = [0] # is used for selections
 SELECTION_OPTIONS = [-1, 0] # [optioncount || -1 to deactivate, TMP_DATA index to store state]
 MESSAGES = []
+
+def getItemFromIndex(index: int) -> Item:
+    return list(PLAYER_DATA["inventory"].keys())[index]
+
+def removeItem(i: Item) -> Item:
+    PLAYER_DATA["inventory"][i] -= 1
+    if PLAYER_DATA["inventory"][i] <= 0:
+        del PLAYER_DATA["inventory"][i]
+    return i.copy()
+
+def addItem(i: Item):
+    if i in PLAYER_DATA["inventory"]:
+        PLAYER_DATA["inventory"][i] += 1
+    else:
+        PLAYER_DATA["inventory"][i] = 1
+    return i.copy()
 
 def calculateAttack() -> int:
     return 1
@@ -72,7 +80,7 @@ def print_gamestate():
     if GAMESTATE[0] == 2:
         if len(GAMESTATE) == 1:
             addstr("You are currently in the smithy. What would you like to do?\n\n")
-            options = ["Sell", "Combine", "Return"]
+            options = ["Sell", "Combine", "Equip", "Return"]
             print_option_list(options)
         elif len(GAMESTATE) == 2:
             if GAMESTATE[1] == 0: # Sell
@@ -82,10 +90,31 @@ def print_gamestate():
                     print_option_list(options)
                 else:
                     addstr("You are currently in the smithy. What would you like to sell?\n\n")
-                    options = [f"{amount} * {item.type.capitalize().ljust(20, ' ')}:{item.determine_price()}⛃" for item, amount in PLAYER_DATA["inventory"].items()] + ["Return"]
+                    options = [f"{amount} * {str(item).ljust(20, ' ')}:{item.determine_price()}⛃" for item, amount in PLAYER_DATA["inventory"].items()] + ["Return"]
                     print_option_list(options)
             elif GAMESTATE[1] == 1: # Combine
-                pass
+                if len(PLAYER_DATA["inventory"]) <= 0:
+                    addstr("You are currently in the smithy, but you don't have anything to sell.\n\n")
+                    options = ["Return"]
+                    print_option_list(options)
+                else: # Choosing item to combine into
+                    addstr("You are currently in the smithy. What would you like to combine another item into?\n\n")
+                    options = [f"{amount} * {str(item).ljust(20, ' ')}" for item, amount in PLAYER_DATA["inventory"].items()] + ["Return"]
+                    print_option_list(options)
+            elif GAMESTATE[1] == 2: # Equip
+                if len(PLAYER_DATA["inventory"]) <= 0:
+                    addstr("You are currently in the smithy, but you don't have anything to equip.\n\n")
+                    options = ["Return"]
+                    print_option_list(options)
+                else: # Choosing item to equip
+                    addstr("You are currently in the smithy. What would you like to equip?\n\n")
+                    options = [f"{str(item).ljust(20, ' ')}" for item in PLAYER_DATA["inventory"].keys()] + ["Unequip all", "Return"]
+                    print_option_list(options)
+        elif len(GAMESTATE) == 3:
+            if GAMESTATE[1] == 1:
+                addstr("You are currently in the smithy. Which item would you like to combine?\n\n")
+                options = [f"{amount} * {str(item).ljust(20, ' ')}" for item, amount in PLAYER_DATA["inventory"].items()] + ["Return"]
+                print_option_list(options)
         # display inventory
         # if len(PLAYER_DATA["inventory"]) > 0:
         #     for item, amount in PLAYER_DATA["inventory"].items():
@@ -159,8 +188,8 @@ def handle_input(ch: int):
                         MESSAGES.append(f"You received {loot.amount} coins!")
                         PLAYER_DATA["coins"] += loot.amount
                     elif type(loot) is Item:
-                        MESSAGES.append(f"You picked up a {loot.type}!")
-                        PLAYER_DATA["inventory"][loot] = PLAYER_DATA["inventory"][loot] + 1 if loot in PLAYER_DATA["inventory"] else 1 # in case it is not yet in the inventory
+                        MESSAGES.append(f"You picked up a {str(loot)}!")
+                        addItem(loot)
                     
                     GAMESTATE[2] -= 1 # advance one enemy
                     GAMESTATE.pop(3) # remove enemy (indicates that a new one should be added in handle_input)
@@ -171,33 +200,70 @@ def handle_input(ch: int):
     # SMITHY
     elif GAMESTATE[0] == 2:
         if len(GAMESTATE) == 1: # only if in selection screen: Sell, Combine, Return
-            if TMP_DATA[SELECTION_OPTIONS[1]] == 0:
-                GAMESTATE = [2, 0] # -> Sell
-            if TMP_DATA[SELECTION_OPTIONS[1]] == 1:
-                GAMESTATE = [2, 1] # -> Combine TODO implement
-            if TMP_DATA[SELECTION_OPTIONS[1]] == 2:
-                GAMESTATE = [0] # Return
-        elif len(GAMESTATE) == 2: # now in Sell || Combine
+            if TMP_DATA[SELECTION_OPTIONS[1]] in [0, 1, 2]:
+                GAMESTATE = [2, TMP_DATA[SELECTION_OPTIONS[1]]] # -> [Sell, Combine, Equip]
+            elif TMP_DATA[SELECTION_OPTIONS[1]] == 3:
+                GAMESTATE = [0] # -> Return
+        elif len(GAMESTATE) == 2: # now in [Sell, Combine, Equip]
             if GAMESTATE[1] == 0: # Sell
                 if TMP_DATA[SELECTION_OPTIONS[1]] == len(PLAYER_DATA["inventory"]): # Return was selected
                     GAMESTATE = [2]
                 else:
-                    selected_item: Item = list(PLAYER_DATA["inventory"].keys())[TMP_DATA[SELECTION_OPTIONS[1]]]
-                    # try: # in case it does not exist
-                    PLAYER_DATA["inventory"][selected_item] -= 1
+                    selected_item: Item = removeItem(getItemFromIndex(TMP_DATA[SELECTION_OPTIONS[1]]))
                     PLAYER_DATA["coins"] += selected_item.determine_price()
-                    MESSAGES.append(f"You sold {selected_item.type} for {selected_item.determine_price()}⛃")
-                    if PLAYER_DATA["inventory"][selected_item] <= 0:
-                        del PLAYER_DATA["inventory"][selected_item]
+                    MESSAGES.append(f"You sold {str(selected_item)} for {selected_item.determine_price()}⛃")
             elif GAMESTATE[1] == 1: # Combine
-                pass
-
+                if TMP_DATA[SELECTION_OPTIONS[1]] == len(PLAYER_DATA["inventory"]): # Return was selected
+                    GAMESTATE = [2]
+                else:
+                    selected_item: Item = getItemFromIndex(TMP_DATA[SELECTION_OPTIONS[1]])
+                    GAMESTATE.append(selected_item)
+            elif GAMESTATE[1] == 2: # Equip
+                if TMP_DATA[SELECTION_OPTIONS[1]] == len(PLAYER_DATA["inventory"]) + 1: # Return was selected
+                    GAMESTATE = [2]
+                elif TMP_DATA[SELECTION_OPTIONS[1]] == len(PLAYER_DATA["inventory"]): # Unequip all was selected
+                    for item in PLAYER_DATA["equipped"].values():
+                        if item is not None:
+                            addItem(item)
+                    PLAYER_DATA["equipped"] = EMPTY_INVENTORY.copy()
+                else:
+                    selected_item: Item = getItemFromIndex(TMP_DATA[SELECTION_OPTIONS[1]])
+                    if selected_item.type not in ["chestplate", "sword"]:
+                        MESSAGES.append(f"You cannot equip {str(selected_item)}.")
+                    if PLAYER_DATA["equipped"][selected_item.type] is not None:
+                        addItem(PLAYER_DATA["equipped"][selected_item.type])
+                    PLAYER_DATA["equipped"][selected_item.type] = selected_item
+                    MESSAGES.append(f"You equipped {str(selected_item)}.")
+                    removeItem(selected_item)
+        elif len(GAMESTATE) == 3: # second time
+            if GAMESTATE[1] == 1: # Combine
+                selected_item: Item = getItemFromIndex(TMP_DATA[SELECTION_OPTIONS[1]])
+                if GAMESTATE[2].type == selected_item.type:
+                    if int(GAMESTATE[2].level / 10) == int(selected_item.level / 10): # combine items of same type and level / 10
+                        i1 = removeItem(GAMESTATE[2])
+                        try:
+                            removeItem(selected_item)
+                            i1.level += 1
+                        except KeyError:
+                            MESSAGES.append(f"You do not have enough {str(selected_item.type)} to combine.")
+                        finally:
+                            MESSAGES.append(f"You combined the items into {str(i1)}!")
+                            addItem(i1)
+                            GAMESTATE = [2]
+    
     if SELECTION_OPTIONS[0] == -2: # revert to no selection
         SELECTION_OPTIONS[0] = -1
         TMP_DATA[SELECTION_OPTIONS[1]] = 0
 
 
 
+stdscr = initscr()
+clear()
+curs_set(False)
+keypad(scr_id=stdscr, yes=True)
+addItem(Item("sword", 0, 1))
+addItem(Item("sword", 0, 1))
+addItem(Item("sword", 0, 1))
 while True:
     clear()
     print_header()
