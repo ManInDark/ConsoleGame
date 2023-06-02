@@ -25,10 +25,12 @@ def removeItem(i: Item) -> Item:
     return i.copy()
 
 def addItem(i: Item):
+    amount = i.amount
+    i.amount = 1
     if i in PLAYER_DATA["inventory"]:
-        PLAYER_DATA["inventory"][i] += i.amount
+        PLAYER_DATA["inventory"][i] += amount
     else:
-        PLAYER_DATA["inventory"][i] = i.amount
+        PLAYER_DATA["inventory"][i] = amount
     return i.copy()
 
 def calculateAttack() -> int:
@@ -50,6 +52,7 @@ def print_option_list(options, index=0):
     SELECTION_OPTIONS = [len(options), index]
 
 def print_gamestate():
+    global GAMESTATE
 
     # HOME
     if GAMESTATE[0] == 0:
@@ -193,6 +196,9 @@ def handle_input(ch: int):
                     
                     GAMESTATE[2] -= 1 # advance one enemy
                     GAMESTATE.pop(3) # remove enemy (indicates that a new one should be added in handle_input)
+                    if GAMESTATE[2] < 0:
+                        MESSAGES.append("You have defeated the boss of this dungeon! You leave the dungeon through the door you entered from.")
+                        GAMESTATE = [1]
             elif TMP_DATA[SELECTION_OPTIONS[1]] == 1: # flee
                 MESSAGES.append("You fled from the dungeon.")
                 GAMESTATE = [0]
@@ -228,13 +234,18 @@ def handle_input(ch: int):
                     PLAYER_DATA["equipped"] = EMPTY_INVENTORY.copy()
                 else:
                     selected_item: Item = getItemFromIndex(TMP_DATA[SELECTION_OPTIONS[1]])
-                    if selected_item.type not in ["chestplate", "sword"]:
+                    if selected_item.type in ["chestplate", "sword"]:
+                        if PLAYER_DATA["equipped"][selected_item.type] is not None:
+                            addItem(PLAYER_DATA["equipped"][selected_item.type])
+                        PLAYER_DATA["equipped"][selected_item.type] = selected_item
+                        MESSAGES.append(f"You equipped {str(selected_item)}.")
+                        removeItem(selected_item)
+                    elif selected_item.type in ["apple"]:
+                        PLAYER_DATA["health"] = min(PLAYER_DATA["health"] + selected_item.determine_price(), PLAYER_DATA["health-max"])
+                        removeItem(selected_item)
+                        MESSAGES.append(f"You ate the {str(selected_item)} and restored {selected_item.determine_price()} health.")
+                    else:
                         MESSAGES.append(f"You cannot equip {str(selected_item)}.")
-                    if PLAYER_DATA["equipped"][selected_item.type] is not None:
-                        addItem(PLAYER_DATA["equipped"][selected_item.type])
-                    PLAYER_DATA["equipped"][selected_item.type] = selected_item
-                    MESSAGES.append(f"You equipped {str(selected_item)}.")
-                    removeItem(selected_item)
         elif len(GAMESTATE) == 3: # second time
             if GAMESTATE[1] == 1: # Combine
                 selected_item: Item = getItemFromIndex(TMP_DATA[SELECTION_OPTIONS[1]])
