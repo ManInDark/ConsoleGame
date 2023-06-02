@@ -26,9 +26,9 @@ def removeItem(i: Item) -> Item:
 
 def addItem(i: Item):
     if i in PLAYER_DATA["inventory"]:
-        PLAYER_DATA["inventory"][i] += 1
+        PLAYER_DATA["inventory"][i] += i.amount
     else:
-        PLAYER_DATA["inventory"][i] = 1
+        PLAYER_DATA["inventory"][i] = i.amount
     return i.copy()
 
 def calculateAttack() -> int:
