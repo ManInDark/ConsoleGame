@@ -32,10 +32,10 @@ def addItem(i: Item):
     return i.copy()
 
 def calculateAttack() -> int:
-    return 1
+    return 5 + (PLAYER_DATA["equipped"]["sword"].determine_price() if PLAYER_DATA["equipped"]["sword"] is not None else 0)
 
 def calculateDefense() -> int:
-    return 1
+    return 5 + (PLAYER_DATA["equipped"]["chestplate"].determine_price() if PLAYER_DATA["equipped"]["chestplate"] is not None else 0)
 
 def print_header():
     width = 9
